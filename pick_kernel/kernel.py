@@ -8,6 +8,8 @@ from queue import Empty
 import zmq
 from zmq.eventloop import ioloop
 
+from tornado.ioloop import IOLoop
+
 # Rely on Socket subclass that returns Futures for recv*
 from zmq.eventloop.future import Context
 
@@ -96,12 +98,16 @@ Read more about it at https://github.com/nteract/pick
         self.acquiring_kernel = asyncio.Lock()
         self.kernel_launched = asyncio.Event()
 
+    async def noreally(self):
+        self.iopub_relay_task = asyncio.create_task(self.relay_iopub_messages)
+
     def start(self):
         """Start the PickyKernel and its event loop"""
         super().start()
+
+        IOLoop.current().add_callback(self.noreally)
         # Collect and send all IOPub messages, for all time
         # TODO: Check errors from this loop and restart as needed (or shut down the kernel)
-        self.iopub_relay_task = asyncio.create_task(self.relay_iopub_messages)
 
     async def relay_iopub_messages(self):
         """Relay messages received by the Picky Kernel
