@@ -5,9 +5,9 @@ import sys
 from binascii import hexlify
 from queue import Empty
 
-from tornado.ioloop import IOLoop
 import zmq
 from zmq.eventloop import ioloop
+
 # Rely on Socket subclass that returns Futures for recv*
 from zmq.eventloop.future import Context
 
@@ -33,6 +33,7 @@ class KernelProxy(object):
     The kernel's `shell` channel is used for request/reply calls to the kernel.
     The `KernelProxy` hooks up relay of messages on the shell channel.
     """
+
     def __init__(self, manager, shell_upstream):
         self.manager = manager
         # TODO: Connect Control & STDIN
@@ -42,7 +43,6 @@ class KernelProxy(object):
 
         # provide the url
         self.iopub_url = self.manager._make_url("iopub")
-        IOLoop.current().add_callback(self.relay_shell)
 
     async def relay_shell(self):
         """Coroutine for relaying any shell replies"""
@@ -53,6 +53,7 @@ class KernelProxy(object):
 
 class PickyKernel(Kernel):
     """A kernel that accepts kernel magics which configure the environment"""
+
     implementation = "picky"
     implementation_version = __version__
 
@@ -98,10 +99,9 @@ Read more about it at https://github.com/nteract/pick
     def start(self):
         """Start the PickyKernel and its event loop"""
         super().start()
-        loop = IOLoop.current()
         # Collect and send all IOPub messages, for all time
         # TODO: Check errors from this loop and restart as needed (or shut down the kernel)
-        loop.add_callback(self.relay_iopub_messages)
+        self.iopub_relay_task = asyncio.create_task(self.relay_iopub_messages)
 
     async def relay_iopub_messages(self):
         """Relay messages received by the Picky Kernel
@@ -152,6 +152,8 @@ Read more about it at https://github.com/nteract/pick
         await km.start_kernel()
 
         kernel = KernelProxy(manager=km, shell_upstream=self.shell_stream)
+        self.shell_relay_task = asyncio.create_task(kernel.relay_shell())
+
         self.iosub.connect(kernel.iopub_url)
 
         # Make sure the kernel is really started. We do that by using
@@ -380,6 +382,7 @@ you want to change configuration.
 
 class PickyKernelApp(IPKernelApp):
     """A kernel application for starting a `PickyKernel`, a proxying kernel with options."""
+
     kernel_class = PickyKernel
     # TODO: Uncomment this to disable IO Capture of this kernel
     # outstream_class = None
